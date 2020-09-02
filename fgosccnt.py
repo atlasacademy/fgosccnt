@@ -165,7 +165,8 @@ class ScreenShot:
             self.items.append(dropitem)
 
         self.itemlist = self.makeitemlist()
-        self.total_qp = self.get_qp()
+        self.total_qp = self.get_qp(debug)
+        self.gained_qp = self.get_qp_gained(debug)
 
     def get_qp_from_text(self, text):
         """
@@ -195,21 +196,41 @@ class ScreenShot:
             config="-l eng --oem 1 --psm 7 -c tessedit_char_whitelist=,0123456789",
         )
 
-    def get_qp(self):
+    def __get_qp_inner(self, topleft, bottomright, debug):
+        qp_text = self.extract_text_from_image(
+            self.img_rgb_orig[topleft[1]: bottomright[1], topleft[0] : bottomright[0]]
+        )
+
+        qp = self.get_qp_from_text(qp_text)
+
+        if qp == 0:
+            qp = -1
+
+        return qp
+
+
+    def get_qp(self, debug=False):
         """
         capy-drop-parser から流用
         """
-        pt = pageinfo.detect_qp_region(self.img_rgb_orig)
-        qp_total_text = self.extract_text_from_image(
-            self.img_rgb_orig[pt[0][1]: pt[1][1], pt[0][0] : pt[1][0]]
-        )
+        pt = pageinfo.detect_qp_region(self.img_rgb_orig, debug, "./qp_total_detection.jpg")
+        return self.__get_qp_inner(pt[0], pt[1], debug)
 
-        qp_total = self.get_qp_from_text(qp_total_text)
 
-        if qp_total == 0:
-            qp_total = -1
+    def get_qp_gained(self, debug=False):
+        (topleft, bottomright) = pageinfo.detect_qp_region(self.img_rgb_orig)
+        # Detecting the QP box with different shading is "easy", while detecting the absence of it for the gain QP amount is hard. However, the 2 values have the same font and thus roughly the same height (please NA...). You can consider them to be 2 same-sized boxes on top of each other.
 
-        return qp_total
+        height = bottomright[1] - topleft[1]
+        topleft = (topleft[0], topleft[1] - height)
+        bottomright = (bottomright[0], bottomright[1] - height)
+
+        if debug:
+            img_copy = self.img_rgb_orig.copy()
+            cv2.rectangle(img_copy, topleft, bottomright, (0, 0, 255), 3)
+            cv2.imwrite("./qp_gain_detection.jpg", img_copy)
+
+        return self.__get_qp_inner(topleft, bottomright, False)
 
     def find_edge(self, img_th, reverse=False):
         """
