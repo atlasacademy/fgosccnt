@@ -191,9 +191,11 @@ class ScreenShot:
 ##        cv2.waitKey(0)
 ##        cv2.destroyAllWindows()
 
+        # '+' is needed to ensure that tesseract doesn't force a recognition on it, 
+        # which results in a '4' most of the time. 
         return pytesseract.image_to_string(
             qp_image,
-            config="-l eng --oem 1 --psm 7 -c tessedit_char_whitelist=,0123456789",
+            config="-l eng --oem 1 --psm 7 -c tessedit_char_whitelist=,0123456789+",
         )
 
     def __get_qp_inner(self, topleft, bottomright, debug):
