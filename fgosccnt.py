@@ -225,7 +225,8 @@ class ScreenShot:
 
         height = bottomright[1] - topleft[1]
         topleft = (topleft[0], topleft[1] - height)
-        bottomright = (bottomright[0], bottomright[1] - height)
+        # Older NA layouts have the gain numbers shifted to the right, so we add to compensate
+        bottomright = (bottomright[0] + 20, bottomright[1] - height)
 
         if debug:
             img_copy = self.img_rgb_orig.copy()
