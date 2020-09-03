@@ -1523,7 +1523,7 @@ def get_exif(img):
     return "NON"
 
 
-def get_output(filenames, args):
+def get_output(input_file_paths, args):
     """
     出力内容を作成
     """
@@ -1550,80 +1550,89 @@ def get_output(filenames, args):
     prev_pages = 0
     prev_pagenum = 0
     prev_total_qp = -1
+    prev_gained_qp = -1
     prev_itemlist = []
     prev_datetime = datetime.datetime(year=2015, month=7, day=30, hour=0)
-    all_list = []
-    
-    for filename in filenames:
+    all_parsed_output = []
+   
+    for file_path in input_file_paths:
+        parsed_img_data = {"status": "Incomplete"}
+
         if debug:
-            print(filename)
-        f = Path(filename)
+            print(file_path)
+        parsed_img_data["image_path"] = str(file_path)
 
-        if f.exists() == False:
-            output = { 'filename': str(filename) + ': not found' }
-            all_list.append([])
-        else:
-            img_rgb = imread(filename)
-            fileextention = Path(filename).suffix
+        if not Path(file_path).exists():
+            # TODO: is this needed?
+            parsed_img_data["status"] = "File not found"
+            all_parsed_output.append(parsed_img_data)
+            continue
+        
+        img_rgb = imread(file_path)
+        file_extention = Path(file_path).suffix
 
-            try:
-                sc = ScreenShot(img_rgb, svm, svm_chest, svm_card, fileextention, debug)
+        try:
+            screenshot = ScreenShot(img_rgb, svm, svm_chest, svm_card, file_extention, debug)
+            
+            # If the previous image indicated more coming, check whether this is the fated one. 
+            if (prev_pages - prev_pagenum > 0 and screenshot.pagenum - prev_pagenum != 1) \
+               or (prev_pages - prev_pagenum == 0 and screenshot.pagenum != 1):
+                all_parsed_output.append({"status": "Missing screenshots"})
 
-                #2頁目以前のスクショが無い場合に migging と出力                
-                if (prev_pages - prev_pagenum > 0 and sc.pagenum - prev_pagenum != 1) \
-                   or (prev_pages - prev_pagenum == 0 and sc.pagenum != 1):
-                    fileoutput.append({'filename': 'missing'})
-                    all_list.append([])
+            # Detect whether image is a duplicate
+            # Image is a candidate duplicate if drops and gained QP match previous image.
+            # Duplicate is confirmed if:
+            # - QP is not capped and drops are the same as in the previous image
+            # - QP is capped and previous image was taken within 15sec
+            # TODO: is this needed?
+            pilimg = Image.open(file_path)
+            date_time = get_exif(pilimg)
+            if date_time == "NON" or prev_datetime == "NON":
+                time_delta = datetime.timedelta(days=1)
+            else:
+                time_delta = date_time - prev_datetime
+            if prev_itemlist == screenshot.itemlist and prev_gained_qp == screenshot.gained_qp:
+                if (screenshot.total_qp != 999999999 and screenshot.total_qp == prev_total_qp) \
+                    or (screenshot.total_qp == 999999999 and  time_delta.total_seconds() < args.timeout):
+                    if debug:
+                        print("args.timeout: {}".format(args.timeout))
+                        print("filename: {}".format(file_path))
+                        print("prev_itemlist: {}".format(prev_itemlist))
+                        print("screenshot.itemlist: {}".format(screenshot.itemlist))
+                        print("screenshot.total_qp: {}".format(screenshot.total_qp))
+                        print("prev_total_qp: {}".format(prev_total_qp))
+                        print("datetime: {}".format(date_time))
+                        print("prev_datetime: {}".format(prev_datetime))
+                        print("td.total_second: {}".format(time_delta.total_seconds()))
+                    parsed_img_data["status"] = "Duplicate file"
+                    all_parsed_output.append(parsed_img_data)
+                    continue
 
-                # ドロップ内容が同じで下記のとき、重複除外
-                # QPカンストじゃない時、QPが前と一緒
-                # QPカンストの時、Exif内のファイル作成時間が15秒未満
-                pilimg = Image.open(filename)
-                dt = get_exif(pilimg)
-                if dt == "NON" or prev_datetime == "NON":
-                    td = datetime.timedelta(days=1)
-                else:
-                    td = dt - prev_datetime
-                if prev_itemlist == sc.itemlist:
-                    if (sc.total_qp != 999999999 and sc.total_qp == prev_total_qp) \
-                        or (sc.total_qp == 999999999 and  td.total_seconds() < args.timeout):
-                        if debug:
-                            print("args.timeout: {}".format(args.timeout))
-                            print("filename: {}".format(filename))
-                            print("prev_itemlist: {}".format(prev_itemlist))
-                            print("sc.itemlist: {}".format(sc.itemlist))
-                            print("sc.total_qp: {}".format(sc.total_qp))
-                            print("prev_total_qp: {}".format(prev_total_qp))
-                            print("datetime: {}".format(dt))
-                            print("prev_datetime: {}".format(prev_datetime))
-                            print("td.total_second: {}".format(td.total_seconds()))
-                        fileoutput.append({'filename': str(filename) + ': duplicate'})
-                        all_list.append([])
-                        continue
+            # Prep next iter
+            prev_pages = screenshot.pages
+            prev_pagenum = screenshot.pagenum
+            prev_total_qp = screenshot.total_qp
+            prev_gained_qp = screenshot.gained_qp
+            prev_itemlist = screenshot.itemlist
+            prev_datetime = date_time
 
-                all_list.append(sc.itemlist)
+            # Gather data
+            parsed_img_data["qp_total"] = screenshot.total_qp
+            parsed_img_data["qp_gained"] = screenshot.gained_qp
+            parsed_img_data["scroll_position"] = screenshot.scroll_position
+            parsed_img_data["drop_count"] = screenshot.chestnum
+            parsed_img_data["drops_found"] = len(screenshot.itemlist)
+            parsed_img_data["drops"] = screenshot.itemlist 
 
-                prev_pages = sc.pages
-                prev_pagenum = sc.pagenum
-                prev_total_qp = sc.total_qp
-                prev_itemlist = sc.itemlist
-                prev_datetime = dt
-
-                sumdrop = len([d for d in sc.itemlist if d["name"] != "クエストクリア報酬QP"])
-                output = { 'filename': str(filename),'ドロ数':sumdrop}
-                if sc.pagenum == 1:
-                    if sc.lines >= 7:
-                        output["ドロ数"] = str(output["ドロ数"]) + "++"
-                    elif sc.lines >= 4:
-                        output["ドロ数"] = str(output["ドロ数"]) + "+"
-                elif sc.pagenum == 2 and sc.lines >= 7:             
-                    output["ドロ数"] = str(output["ドロ数"]) + "+"
-                    
-            except:
-                output = ({'filename': str(filename) + ': not valid'})
-                all_list.append([])
-        fileoutput.append(output)
-    return fileoutput, all_list
+        except Exception as e:
+            if debug: print(e)
+            parsed_img_data["status"] = "Invalid file"
+            all_parsed_output.append(parsed_img_data)
+            continue
+        
+        parsed_img_data["status"] = "OK"
+        all_parsed_output.append(parsed_img_data)
+    return all_parsed_output
 
 
 def sort_files(files, ordering):
@@ -1752,29 +1761,12 @@ if __name__ == '__main__':
         if not ndir.is_dir():
             ndir.mkdir(parents=True)
 
+    # gather input image files
     if args.folder:
         inputs = [x for x in Path(args.folder).iterdir()]
     else:
         inputs = args.filenames
     
     inputs = sort_files(inputs, args.ordering)
-    fileoutput, all_new_list = get_output(inputs, args)
-
-    # CSVヘッダーをつくる
-    csv_heder, ce0_flag, questname = make_csv_header(all_new_list)
-    csv_sum, csv_data = make_csv_data(all_new_list, ce0_flag)
-
-    writer = csv.DictWriter(sys.stdout, fieldnames=csv_heder, lineterminator='\n')
-    writer.writeheader()
-    if len(all_new_list) > 1: #ファイル一つのときは合計値は出さない
-        if questname == "":
-            questname = "合計"
-        a = {'filename':questname, 'ドロ数':''}
-        a.update(csv_sum)
-        writer.writerow(a)
-    for fo, cd in zip(fileoutput, csv_data):
-        fo.update(cd)
-        writer.writerow(fo)
-    if 'ドロ数' in fo.keys(): # issue: #55
-        if len(fileoutput) > 1 and str(fo['ドロ数']).endswith('+'):
-            writer.writerow({'filename': 'missing'})
+    parsed_output = get_output(inputs, args)
+    print(parsed_output)
