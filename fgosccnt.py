@@ -167,6 +167,36 @@ class ScreenShot:
         self.itemlist = self.makeitemlist()
         self.total_qp = self.get_qp(debug)
         self.gained_qp = self.get_qp_gained(debug)
+        self.scroll_position = self.determine_scroll_position(debug)
+
+    # TODO: can't get this to match capy 100%. We're off by max ~0.001
+    def determine_scroll_position(self, debug=False):
+        width = self.img_rgb.shape[1]
+        # TODO: is it okay to hardcode this?
+        topleft = (width - 90, 180)
+        bottomright = (width, 180 + 660)
+
+        if debug:
+            img_copy = self.img_rgb.copy()
+            cv2.rectangle(img_copy, topleft, bottomright, (0, 0, 255), 3)
+            cv2.imwrite("./scroll_bar_selected.jpg", img_copy)
+
+        gray_image = cv2.cvtColor(
+            self.img_rgb[topleft[1] : bottomright[1], topleft[0] : bottomright[0]], cv2.COLOR_BGR2GRAY
+        )
+        _, binary = cv2.threshold(gray_image, 225, 255, cv2.THRESH_BINARY)
+        if debug:
+            cv2.imwrite("scroll_bar_binary.png", binary)
+        _, template = cv2.threshold(
+            cv2.imread("./data/other/scroll_bar_upper.png", cv2.IMREAD_GRAYSCALE),
+            225,
+            255,
+            cv2.THRESH_BINARY,
+        )
+
+        res = cv2.matchTemplate(binary, template, cv2.TM_CCOEFF_NORMED)
+        _, maxValue, _, max_loc = cv2.minMaxLoc(res)
+        return max_loc[1] / gray_image.shape[0] if maxValue > 0.5 else -1
 
     def get_qp_from_text(self, text):
         """
