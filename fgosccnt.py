@@ -169,7 +169,6 @@ class ScreenShot:
         self.gained_qp = self.get_qp_gained(debug)
         self.scroll_position = self.determine_scroll_position(debug)
 
-    # TODO: can't get this to match capy 100%. We're off by max ~0.001
     def determine_scroll_position(self, debug=False):
         width = self.img_rgb.shape[1]
         # TODO: is it okay to hardcode this?
