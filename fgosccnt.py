@@ -1100,6 +1100,8 @@ class Item:
         else:
             base_line = int(180/206*self.height)
 
+        self.__bonus_string_into_int()
+
         # 実際の(ボーナス無し)ドロップ数の右端の位置を決定
         offset_x = -7 if mode=="na" else 0
         if self.category in ["Quest Reward", "Point"]  or self.name == "QP":
@@ -1112,6 +1114,14 @@ class Item:
         self.dropnum =  self.detect_white_char(base_line, margin_right, font_size, debug=debug)
         if len(self.dropnum) == 0:
             self.dropnum = "x1"
+
+
+    def __bonus_string_into_int(self):
+        try:
+            self.bonus = int(re.sub("\(|\)|\+", "", self.bonus))
+        except:
+            self.bonus = 0
+        
 
     def gem_img2id(self, img, gem_dict):
         hash_gem = self.compute_gem_hash(img)
