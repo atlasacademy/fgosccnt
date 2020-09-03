@@ -4,7 +4,6 @@ import re
 import argparse
 from pathlib import Path
 from collections import Counter
-import csv
 from enum import Enum
 import itertools
 import json
@@ -33,7 +32,7 @@ class Ordering(Enum):
     TIMESTAMP = 'timestamp'         # 作成日時
 
     def __str__(self):
-        return self.value
+        return str(self.value)
 
 
 basedir = Path(__file__).resolve().parent
@@ -216,12 +215,14 @@ class ScreenShot:
             cv2.rectangle(img_copy, topleft, bottomright, (0, 0, 255), 3)
             cv2.imwrite("./scroll_bar_selected.jpg", img_copy)
 
-        gray_image = self.img_gray[topleft[1] : bottomright[1], topleft[0] : bottomright[0]]
+        gray_image = self.img_gray[topleft[1]
+            : bottomright[1], topleft[0]: bottomright[0]]
         _, binary = cv2.threshold(gray_image, 225, 255, cv2.THRESH_BINARY)
         if debug:
             cv2.imwrite("scroll_bar_binary.png", binary)
         _, template = cv2.threshold(
-            cv2.imread("./data/other/scroll_bar_upper.png", cv2.IMREAD_GRAYSCALE),
+            cv2.imread("./data/other/scroll_bar_upper.png",
+                       cv2.IMREAD_GRAYSCALE),
             225,
             255,
             cv2.THRESH_BINARY,
@@ -245,23 +246,24 @@ class ScreenShot:
 
         return qp
 
-    def extract_text_from_image(sef, image):
+    def extract_text_from_image(self, image):
         """
         capy-drop-parser から流用
         """
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         _, qp_image = cv2.threshold(gray, 65, 255, cv2.THRESH_BINARY_INV)
 
-        # '+' is needed to ensure that tesseract doesn't force a recognition on it, 
-        # which results in a '4' most of the time. 
+        # '+' is needed to ensure that tesseract doesn't force a recognition on it,
+        # which results in a '4' most of the time.
         return pytesseract.image_to_string(
             qp_image,
             config="-l eng --oem 1 --psm 7 -c tessedit_char_whitelist=,0123456789+",
         )
 
-    def __get_qp_inner(self, topleft, bottomright, debug):
+    def __get_qp_inner(self, topleft, bottomright):
         qp_text = self.extract_text_from_image(
-            self.img_rgb_orig[topleft[1]: bottomright[1], topleft[0] : bottomright[0]]
+            self.img_rgb_orig[topleft[1]: bottomright[1],
+                              topleft[0]: bottomright[0]]
         )
 
         qp = self.get_qp_from_text(qp_text)
@@ -271,14 +273,13 @@ class ScreenShot:
 
         return qp
 
-
     def get_qp(self, debug=False):
         """
         capy-drop-parser から流用
         """
-        pt = pageinfo.detect_qp_region(self.img_rgb_orig, debug, "./qp_total_detection.jpg")
-        return self.__get_qp_inner(pt[0], pt[1], debug)
-
+        pt = pageinfo.detect_qp_region(
+            self.img_rgb_orig, debug, "./qp_total_detection.jpg")
+        return self.__get_qp_inner(pt[0], pt[1])
 
     def get_qp_gained(self, debug=False):
         (topleft, bottomright) = pageinfo.detect_qp_region(self.img_rgb_orig)
@@ -294,7 +295,7 @@ class ScreenShot:
             cv2.rectangle(img_copy, topleft, bottomright, (0, 0, 255), 3)
             cv2.imwrite("./qp_gain_detection.jpg", img_copy)
 
-        return self.__get_qp_inner(topleft, bottomright, False)
+        return self.__get_qp_inner(topleft, bottomright)
 
     def find_edge(self, img_th, reverse=False):
         """
@@ -1135,7 +1136,8 @@ class Item:
                 else:
                     font_size = FONTSIZE_SMALL
         else:
-            self.bonus, bonus_pts, font_size = self.detect_bonus_char4jpg(mode, debug)
+            self.bonus, bonus_pts, font_size = self.detect_bonus_char4jpg(
+                mode, debug)
         if debug:
             print("Bonus Font Size: {}\nBonus: {}".format(
                 font_size, self.bonus))
@@ -1166,13 +1168,11 @@ class Item:
         if len(self.dropnum) == 0:
             self.dropnum = "x1"
 
-
     def __bonus_string_into_int(self):
         try:
-            self.bonus = int(re.sub("\(|\)|\+", "", self.bonus))
+            self.bonus = int(re.sub(r"\(|\)|\+", "", self.bonus))
         except:
             self.bonus = 0
-        
 
     def gem_img2id(self, img, gem_dict):
         hash_gem = self.compute_gem_hash(img)
@@ -1186,7 +1186,6 @@ class Item:
         return gem[0]
 
     def classify_item(self, img, currnet_dropPriority, debug=False):
-
         """
         imgとの距離を比較して近いアイテムを求める
         id を返すように変更
@@ -1611,7 +1610,7 @@ def get_output(input_file_paths, args):
     prev_itemlist = []
     prev_datetime = datetime.datetime(year=2015, month=7, day=30, hour=0)
     all_parsed_output = []
-   
+
     for file_path in input_file_paths:
         parsed_img_data = {"status": "Incomplete"}
 
@@ -1624,14 +1623,15 @@ def get_output(input_file_paths, args):
             parsed_img_data["status"] = "File not found"
             all_parsed_output.append(parsed_img_data)
             continue
-        
+
         img_rgb = imread(file_path)
         file_extention = Path(file_path).suffix
 
         try:
-            screenshot = ScreenShot(img_rgb, svm, svm_chest, svm_card, file_extention, debug)
-            
-            # If the previous image indicated more coming, check whether this is the fated one. 
+            screenshot = ScreenShot(
+                img_rgb, svm, svm_chest, svm_card, file_extention, debug)
+
+            # If the previous image indicated more coming, check whether this is the fated one.
             if (prev_pages - prev_pagenum > 0 and screenshot.pagenum - prev_pagenum != 1) \
                or (prev_pages - prev_pagenum == 0 and screenshot.pagenum != 1):
                 all_parsed_output.append({"status": "Missing screenshots"})
@@ -1650,17 +1650,20 @@ def get_output(input_file_paths, args):
                 time_delta = date_time - prev_datetime
             if prev_itemlist == screenshot.itemlist and prev_gained_qp == screenshot.gained_qp:
                 if (screenshot.total_qp != 999999999 and screenshot.total_qp == prev_total_qp) \
-                    or (screenshot.total_qp == 999999999 and  time_delta.total_seconds() < args.timeout):
+                        or (screenshot.total_qp == 999999999 and time_delta.total_seconds() < args.timeout):
                     if debug:
                         print("args.timeout: {}".format(args.timeout))
                         print("filename: {}".format(file_path))
                         print("prev_itemlist: {}".format(prev_itemlist))
-                        print("screenshot.itemlist: {}".format(screenshot.itemlist))
-                        print("screenshot.total_qp: {}".format(screenshot.total_qp))
+                        print("screenshot.itemlist: {}".format(
+                            screenshot.itemlist))
+                        print("screenshot.total_qp: {}".format(
+                            screenshot.total_qp))
                         print("prev_total_qp: {}".format(prev_total_qp))
                         print("datetime: {}".format(date_time))
                         print("prev_datetime: {}".format(prev_datetime))
-                        print("td.total_second: {}".format(time_delta.total_seconds()))
+                        print("td.total_second: {}".format(
+                            time_delta.total_seconds()))
                     parsed_img_data["status"] = "Duplicate file"
                     all_parsed_output.append(parsed_img_data)
                     continue
@@ -1679,14 +1682,15 @@ def get_output(input_file_paths, args):
             parsed_img_data["scroll_position"] = screenshot.scroll_position
             parsed_img_data["drop_count"] = screenshot.chestnum
             parsed_img_data["drops_found"] = len(screenshot.itemlist)
-            parsed_img_data["drops"] = screenshot.itemlist 
+            parsed_img_data["drops"] = screenshot.itemlist
 
         except Exception as e:
-            if debug: print(e)
+            if debug:
+                print(e)
             parsed_img_data["status"] = "Invalid file"
             all_parsed_output.append(parsed_img_data)
             continue
-        
+
         parsed_img_data["status"] = "OK"
         all_parsed_output.append(parsed_img_data)
     return all_parsed_output
@@ -1768,7 +1772,7 @@ def make_csv_header(item_list):
                   for a in flat_list]
     ce0_flag = ("Craft Essence"
                 not in [d.get('category') for d in flat_list]) \
-                and (max([d.get("id") for d in flat_list]) > 9707500)
+        and (max([d.get("id") for d in flat_list]) > 9707500)
     if ce0_flag:
         short_list.append({"id": 99999990, "name": "礼装",
                            "category": "Craft Essence",
@@ -1784,10 +1788,10 @@ def make_csv_header(item_list):
         if nlist['category'] in ['Quest Reward', 'Point'] \
            or nlist["name"] == "QP":
             tmp = out_name(nlist['id']) \
-                  + "(+" + change_value(nlist["dropnum"]) + ")"
+                + "(+" + change_value(nlist["dropnum"]) + ")"
         elif nlist["dropnum"] > 1:
             tmp = out_name(nlist['id']) \
-                  + "(x" + change_value(nlist["dropnum"]) + ")"
+                + "(x" + change_value(nlist["dropnum"]) + ")"
         elif nlist["name"] == "礼装":
             tmp = "礼装"
         else:
