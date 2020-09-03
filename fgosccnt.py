@@ -162,7 +162,7 @@ class ScreenShot:
             if debug: cv2.imwrite('item' + str(i) + '.png', item_img_rgb)
             dropitem = Item(item_img_rgb, item_img_gray, svm, svm_card, fileextention, self.curret_dropPriority, mode, debug)
             self.curret_dropPriority = item_dropPriority[dropitem.id]
-            self.items.append(dropitem)
+            self.items.append((dropitem, pt))
 
         self.itemlist = self.makeitemlist()
         self.total_qp = self.get_qp(debug)
@@ -381,7 +381,7 @@ class ScreenShot:
         アイテムを出力
         """
         itemlist = []
-        for i, item in enumerate(self.items):
+        for i, (item, pt) in enumerate(self.items):
             tmp = {}
             if item.category == "Quest Reward":
                 tmp['id'] = ID_REWARD_QP
@@ -394,6 +394,8 @@ class ScreenShot:
             tmp['dropnum'] = int(item.dropnum[1:])
             tmp['bonus'] = item.bonus
             tmp['category'] = item.category
+            tmp['x'] = pt[0]
+            tmp['y'] = pt[1]
             itemlist.append(tmp)
         return itemlist
 
