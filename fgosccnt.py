@@ -180,9 +180,7 @@ class ScreenShot:
             cv2.rectangle(img_copy, topleft, bottomright, (0, 0, 255), 3)
             cv2.imwrite("./scroll_bar_selected.jpg", img_copy)
 
-        gray_image = cv2.cvtColor(
-            self.img_rgb[topleft[1] : bottomright[1], topleft[0] : bottomright[0]], cv2.COLOR_BGR2GRAY
-        )
+        gray_image = self.img_gray[topleft[1] : bottomright[1], topleft[0] : bottomright[0]]
         _, binary = cv2.threshold(gray_image, 225, 255, cv2.THRESH_BINARY)
         if debug:
             cv2.imwrite("scroll_bar_binary.png", binary)
