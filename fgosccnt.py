@@ -1856,4 +1856,4 @@ if __name__ == '__main__':
 
     inputs = sort_files(inputs, args.ordering)
     parsed_output = get_output(inputs, args)
-    print(parsed_output)
+    print(json.dumps(parsed_output))
