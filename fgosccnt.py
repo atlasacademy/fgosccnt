@@ -433,7 +433,7 @@ class ScreenShot:
                 tmp['id'] = item.id
                 tmp['name'] = item.name
                 tmp['dropPriority'] = item_dropPriority[item.id]
-            tmp['dropnum'] = int(item.dropnum[1:])
+            tmp['stack'] = int(item.dropnum[1:])
             tmp['bonus'] = item.bonus
             tmp['category'] = item.category
             tmp['x'] = pt[0]
