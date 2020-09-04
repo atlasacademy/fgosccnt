@@ -283,7 +283,10 @@ class ScreenShot:
 
     def get_qp_gained(self, debug=False):
         (topleft, bottomright) = pageinfo.detect_qp_region(self.img_rgb_orig)
-        # Detecting the QP box with different shading is "easy", while detecting the absence of it for the gain QP amount is hard. However, the 2 values have the same font and thus roughly the same height (please NA...). You can consider them to be 2 same-sized boxes on top of each other.
+        # Detecting the QP box with different shading is "easy", while detecting the absence of it
+        # for the gain QP amount is hard. However, the 2 values have the same font and thus roughly
+        # the same height (please NA...). You can consider them to be 2 same-sized boxes on top of
+        # each other.
 
         height = bottomright[1] - topleft[1]
         topleft = (topleft[0], topleft[1] - height + int(height*0.12))
