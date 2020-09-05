@@ -1623,9 +1623,122 @@ def get_exif(img):
     return "NON"
 
 
-def get_output(input_file_paths, args):
+def get_output(filenames, args):
     """
     出力内容を作成
+    """
+    debug = args.debug
+    calc_dist_local()
+    if train_item.exists() is False:
+        print("[エラー]item.xml が存在しません")
+        print("python makeitem.py を実行してください")
+        sys.exit(1)
+    if train_chest.exists() is False:
+        print("[エラー]chest.xml が存在しません")
+        print("python makechest.py を実行してください")
+        sys.exit(1)
+    if train_card.exists() is False:
+        print("[エラー]card.xml が存在しません")
+        print("python makecard.py を実行してください")
+        sys.exit(1)
+    svm = cv2.ml.SVM_load(str(train_item))
+    svm_chest = cv2.ml.SVM_load(str(train_chest))
+    svm_card = cv2.ml.SVM_load(str(train_card))
+
+    fileoutput = []  # 出力
+    prev_pages = 0
+    prev_pagenum = 0
+    prev_total_qp = QP_UNKNOWN
+    prev_itemlist = []
+    prev_datetime = datetime.datetime(year=2015, month=7, day=30, hour=0)
+    all_list = []
+
+    for filename in filenames:
+        if debug:
+            print(filename)
+        f = Path(filename)
+
+        if f.exists() is False:
+            output = {'filename': str(filename) + ': not found'}
+            all_list.append([])
+        else:
+            img_rgb = imread(filename)
+            fileextention = Path(filename).suffix
+
+            try:
+                sc = ScreenShot(img_rgb,
+                                svm, svm_chest, svm_card,
+                                fileextention, debug)
+
+                # ドロップ内容が同じで下記のとき、重複除外
+                # QPカンストじゃない時、QPが前と一緒
+                # QPカンストの時、Exif内のファイル作成時間が15秒未満
+                pilimg = Image.open(filename)
+                dt = get_exif(pilimg)
+                if dt == "NON" or prev_datetime == "NON":
+                    td = datetime.timedelta(days=1)
+                else:
+                    td = dt - prev_datetime
+                if sc.pages - sc.pagenum == 0:
+                    sc.itemlist = sc.itemlist[14-(sc.lines+2) % 3*7:]
+                if prev_itemlist == sc.itemlist:
+                    if (sc.total_qp != 999999999
+                        and sc.total_qp == prev_total_qp) \
+                        or (sc.total_qp == 999999999
+                            and td.total_seconds() < args.timeout):
+                        if debug:
+                            print("args.timeout: {}".format(args.timeout))
+                            print("filename: {}".format(filename))
+                            print("prev_itemlist: {}".format(prev_itemlist))
+                            print("sc.itemlist: {}".format(sc.itemlist))
+                            print("sc.total_qp: {}".format(sc.total_qp))
+                            print("prev_total_qp: {}".format(prev_total_qp))
+                            print("datetime: {}".format(dt))
+                            print("prev_datetime: {}".format(prev_datetime))
+                            print("td.total_second: {}".format(
+                                td.total_seconds()))
+                        fileoutput.append(
+                            {'filename': str(filename) + ': duplicate'})
+                        all_list.append([])
+                        continue
+
+                # 2頁目以前のスクショが無い場合に migging と出力
+                if (prev_pages - prev_pagenum > 0
+                    and sc.pagenum - prev_pagenum != 1) \
+                   or (prev_pages - prev_pagenum == 0 and sc.pagenum != 1):
+                    fileoutput.append({'filename': 'missing'})
+                    all_list.append([])
+
+                all_list.append(sc.itemlist)
+
+                prev_pages = sc.pages
+                prev_pagenum = sc.pagenum
+                prev_total_qp = sc.total_qp
+                prev_itemlist = sc.itemlist
+                prev_datetime = dt
+
+                sumdrop = len([d for d in sc.itemlist
+                               if d["name"] != "クエストクリア報酬QP"])
+                output = {'filename': str(filename), 'ドロ数': sumdrop}
+                if sc.pagenum == 1:
+                    if sc.lines >= 7:
+                        output["ドロ数"] = str(output["ドロ数"]) + "++"
+                    elif sc.lines >= 4:
+                        output["ドロ数"] = str(output["ドロ数"]) + "+"
+                elif sc.pagenum == 2 and sc.lines >= 7:
+                    output["ドロ数"] = str(output["ドロ数"]) + "+"
+
+            except Exception as e:
+                logger.error(e, exc_info=True)
+                output = ({'filename': str(filename) + ': not valid'})
+                all_list.append([])
+        fileoutput.append(output)
+    return fileoutput, all_list
+
+
+def get_atlas_output(input_file_paths, args):
+    """
+    The version of output gathering used by AtlasAcademy. Made to resemble capy's output.
     """
     debug = args.debug
     calc_dist_local()
@@ -1925,5 +2038,5 @@ if __name__ == '__main__':
         inputs = args.filenames
 
     inputs = sort_files(inputs, args.ordering)
-    parsed_output = get_output(inputs, args)
+    parsed_output = get_atlas_output(inputs, args)
     output_json(parsed_output, args.out_folder)
