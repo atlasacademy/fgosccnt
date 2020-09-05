@@ -1873,7 +1873,8 @@ def make_csv_data(sc_list, ce0_flag):
 
 def output_json(parsed_output, out_folder):
     if out_folder is None:
-        print(json.dumps(parsed_output, ensure_ascii=False).encode('utf8'))
+        sys.stdout.buffer.write(json.dumps(
+            parsed_output, ensure_ascii=False).encode('utf8'))
     else:
         if not os.path.exists(out_folder):
             os.makedirs(out_folder)
