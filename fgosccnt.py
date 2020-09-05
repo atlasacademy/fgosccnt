@@ -1677,8 +1677,7 @@ def get_output(input_file_paths, args):
             # If the previous image indicated more coming, check whether this is the fated one.
             if (prev_pages - prev_pagenum > 0 and screenshot.pagenum - prev_pagenum != 1) \
                or (prev_pages - prev_pagenum == 0 and screenshot.pagenum != 1):
-                all_parsed_output.append(
-                    {"status": "Missing screenshot before {}".format(file_path)})
+                parsed_img_data["status"] = "Missing page before this"
 
             # Detect whether image is a duplicate
             # Image is a candidate duplicate if drops and gained QP match previous image.
@@ -1734,7 +1733,7 @@ def get_output(input_file_paths, args):
             all_parsed_output.append(parsed_img_data)
             continue
 
-        parsed_img_data["status"] = "OK"
+        parsed_img_data["status"] = "OK" if parsed_img_data["status"] == "Incomplete" else parsed_img_data["status"]
         all_parsed_output.append(parsed_img_data)
     return all_parsed_output
 
@@ -1880,15 +1879,9 @@ def output_json(parsed_output, out_folder):
             os.makedirs(out_folder)
 
         for parsed_file in parsed_output:
-            try:
-                if parsed_file["status"] != "OK":
-                    raise Exception("Incorrectly parsed file output.")
-
-                title = Path(parsed_file["image_path"]).stem
-                with open(Path("{}/{}.json".format(out_folder, title)), "w") as f:
-                    json.dump(parsed_file, f, indent=4, ensure_ascii=False)
-            except:
-                print("Error during parsing: {}".format(parsed_file))
+            title = Path(parsed_file["image_path"]).stem
+            with open(Path("{}/{}.json".format(out_folder, title)), "w") as f:
+                json.dump(parsed_file, f, indent=4, ensure_ascii=False)
 
 
 if __name__ == '__main__':
