@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import os
 import sys
 import re
 import argparse
@@ -224,7 +225,8 @@ class ScreenShot:
             cv2.rectangle(img_copy, topleft, bottomright, (0, 0, 255), 3)
             cv2.imwrite("./scroll_bar_selected.jpg", img_copy)
 
-        gray_image = self.img_gray[topleft[1]: bottomright[1], topleft[0]: bottomright[0]]
+        gray_image = self.img_gray[topleft[1]
+            : bottomright[1], topleft[0]: bottomright[0]]
         _, binary = cv2.threshold(gray_image, 225, 255, cv2.THRESH_BINARY)
         if debug:
             cv2.imwrite("scroll_bar_binary.png", binary)
@@ -1666,7 +1668,8 @@ def get_output(input_file_paths, args):
             # If the previous image indicated more coming, check whether this is the fated one.
             if (prev_pages - prev_pagenum > 0 and screenshot.pagenum - prev_pagenum != 1) \
                or (prev_pages - prev_pagenum == 0 and screenshot.pagenum != 1):
-                all_parsed_output.append({"status": "Missing screenshots"})
+                all_parsed_output.append(
+                    {"status": "Missing screenshot before {}".format(file_path)})
 
             # Detect whether image is a duplicate
             # Image is a candidate duplicate if drops and gained QP match previous image.
@@ -1859,12 +1862,33 @@ def make_csv_data(sc_list, ce0_flag):
     return csv_sum, csv_data
 
 
+def output_json(parsed_output, out_folder):
+    if out_folder is None:
+        print(json.dumps(parsed_output, ensure_ascii=False).encode('utf8'))
+    else:
+        if not os.path.exists(out_folder):
+            os.makedirs(out_folder)
+
+        for parsed_file in parsed_output:
+            try:
+                if parsed_file["status"] != "OK":
+                    raise Exception("Incorrectly parsed file output.")
+
+                title = Path(parsed_file["image_path"]).stem
+                with open(Path("{}/{}.json".format(out_folder, title)), "w") as f:
+                    json.dump(parsed_file, f, ensure_ascii=False)
+            except:
+                print("Error during parsing: {}".format(parsed_file))
+
+
 if __name__ == '__main__':
     # オプションの解析
     parser = argparse.ArgumentParser(description='FGOスクショからアイテムをCSV出力する')
     # 3. parser.add_argumentで受け取る引数を追加していく
     parser.add_argument('filenames', help='入力ファイル', nargs='*')    # 必須の引数を追加
     parser.add_argument('-f', '--folder', help='フォルダで指定')
+    parser.add_argument('-o', '--out_folder',
+                        help='directory to write parsed data to. If none is provided, output will be written to stdout')
     parser.add_argument('-t', '--timeout', type=int, default=TIMEOUT,
                         help='QPカンスト時の重複チェック間隔(秒): デフォルト' + str(TIMEOUT) + '秒')
     parser.add_argument('--ordering', help='ファイルの処理順序 (未指定の場合 notspecified)',
@@ -1883,6 +1907,10 @@ if __name__ == '__main__':
     )
     logger.setLevel(args.loglevel.upper())
 
+    if args.out_folder is not None and not Path(args.out_folder):
+        print("{} is not a valid path".format(args.out_folder))
+        exit(1)
+
     for ndir in [Item_dir, CE_dir, Point_dir]:
         if not ndir.is_dir():
             ndir.mkdir(parents=True)
@@ -1895,4 +1923,4 @@ if __name__ == '__main__':
 
     inputs = sort_files(inputs, args.ordering)
     parsed_output = get_output(inputs, args)
-    print(json.dumps(parsed_output))
+    output_json(parsed_output, args.out_folder)
