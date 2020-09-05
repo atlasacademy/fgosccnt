@@ -309,7 +309,7 @@ class ScreenShot:
         bounds = pageinfo.detect_qp_region(self.img_rgb)
         if bounds is None:
             # fall back on hardcoded bound
-            bounds = ((288, 863), (838, 939))
+            bounds = ((398, 858), (948, 934))
             (topleft, bottomright) = bounds
         else:
             # Detecting the QP box with different shading is "easy", while detecting the absence of it
