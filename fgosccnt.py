@@ -307,6 +307,9 @@ class ScreenShot:
         bounds = pageinfo.detect_qp_region(
             self.img_rgb_orig, debug, "./qp_total_detection.jpg")
         logger.debug('Total QP bounds: %s', bounds)
+        if bounds is None:
+            return QP_UNKNOWN
+
         return self.__get_qp_inner(bounds[0], bounds[1])
 
     def get_qp_gained(self, debug=False):
