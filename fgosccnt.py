@@ -225,8 +225,7 @@ class ScreenShot:
             cv2.rectangle(img_copy, topleft, bottomright, (0, 0, 255), 3)
             cv2.imwrite("./scroll_bar_selected.jpg", img_copy)
 
-        gray_image = self.img_gray[topleft[1]
-            : bottomright[1], topleft[0]: bottomright[0]]
+        gray_image = self.img_gray[topleft[1]                                   : bottomright[1], topleft[0]: bottomright[0]]
         _, binary = cv2.threshold(gray_image, 225, 255, cv2.THRESH_BINARY)
         if debug:
             cv2.imwrite("scroll_bar_binary.png", binary)
@@ -286,7 +285,8 @@ class ScreenShot:
             config="-l eng --oem 1 --psm 7 -c tessedit_char_whitelist=,0123456789+",
         )
 
-    def __get_qp_inner(self, topleft, bottomright):
+    def __get_qp_inner(self, bounds):
+        (topleft, bottomright) = bounds
         qp_text = self.extract_text_from_image(
             self.img_rgb_orig[topleft[1]: bottomright[1],
                               topleft[0]: bottomright[0]]
@@ -301,38 +301,35 @@ class ScreenShot:
         return qp
 
     def get_qp(self, debug=False):
-        """
-        capy-drop-parser から流用
-        """
         bounds = pageinfo.detect_qp_region(
             self.img_rgb_orig, debug, "./qp_total_detection.jpg")
-        logger.debug('Total QP bounds: %s', bounds)
         if bounds is None:
-            return QP_UNKNOWN
+            bounds = ((145, 481), (145 + 282, 481 + 38))
+        logger.debug('Total QP bounds: %s', bounds)
 
-        return self.__get_qp_inner(bounds[0], bounds[1])
+        return self.__get_qp_inner(bounds)
 
     def get_qp_gained(self, debug=False):
         bounds = pageinfo.detect_qp_region(self.img_rgb_orig)
-        logger.debug('Total QP bounds: %s', bounds)
-        if bounds is None:
-            return QP_UNKNOWN
         # Detecting the QP box with different shading is "easy", while detecting the absence of it
         # for the gain QP amount is hard. However, the 2 values have the same font and thus roughly
         # the same height (please NA...). You can consider them to be 2 same-sized boxes on top of
         # each other.
-
-        (topleft, bottomright) = bounds
-        height = bottomright[1] - topleft[1]
-        topleft = (topleft[0], topleft[1] - height + int(height*0.12))
-        bottomright = (bottomright[0], bottomright[1] - height)
+        if bounds is None:
+            bounds = ((230, 435), (230 + 300, 435 + 38))
+        else:
+            (topleft, bottomright) = bounds
+            height = bottomright[1] - topleft[1]
+            topleft = (topleft[0], topleft[1] - height + int(height*0.12))
+            bottomright = (bottomright[0], bottomright[1] - height)
+        logger.debug('Gained QP bounds: %s', bounds)
 
         if debug:
             img_copy = self.img_rgb_orig.copy()
             cv2.rectangle(img_copy, topleft, bottomright, (0, 0, 255), 3)
             cv2.imwrite("./qp_gain_detection.jpg", img_copy)
 
-        return self.__get_qp_inner(topleft, bottomright)
+        return self.__get_qp_inner(bounds)
 
     def find_edge(self, img_th, reverse=False):
         """
