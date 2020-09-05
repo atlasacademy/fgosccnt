@@ -10,6 +10,7 @@ import json
 from operator import itemgetter
 import math
 import datetime
+import logging
 
 import cv2
 import numpy as np
@@ -21,6 +22,8 @@ import pageinfo
 
 PROGNAME = "FGOスクショカウント"
 VERSION = "0.4.0"
+
+logger = logging.getLogger(__name__)
 
 
 class Ordering(Enum):
@@ -61,6 +64,8 @@ ID_NORTH_AMERICA = 93000500
 ID_SYURENJYO = 94006800
 ID_EVNET = 94000000
 TIMEOUT = 15
+QP_UNKNOWN = -1
+
 
 with open(drop_file, encoding='UTF-8') as f:
     drop_item = json.load(f)
@@ -173,9 +178,7 @@ class ScreenShot:
         self.chestnum = self.ocr_tresurechest(debug)
         if debug:
             print("総ドロップ数(OCR): {}".format(self.chestnum))
-        item_pts = []
-        if self.chestnum >= 0:
-            item_pts = self.img2points()
+        item_pts = self.img2points()
 
         self.items = []
         self.current_dropPriority = PRIORITY_REWARD_QP
@@ -183,19 +186,25 @@ class ScreenShot:
             # qpsplit.py で利用
             item_pts = item_pts[0:1]
         for i, pt in enumerate(item_pts):
-            if debug:
-                print("\n[Item{} Information]".format(i))
             lx, _ = self.find_edge(self.img_th[pt[1]: pt[3],
                                                pt[0]: pt[2]], reverse=True)
+            item_img_th = self.img_th[pt[1]: pt[3] - 30,
+                                      pt[0] + lx: pt[2] + lx]
+            if self.is_empty_box(item_img_th):
+                break
+            if debug:
+                print("\n[Item{} Information]".format(i))
             item_img_rgb = self.img_rgb[pt[1]:  pt[3],
                                         pt[0] + lx:  pt[2] + lx]
             item_img_gray = self.img_gray[pt[1]: pt[3],
                                           pt[0] + lx: pt[2] + lx]
             if debug:
                 cv2.imwrite('item' + str(i) + '.png', item_img_rgb)
-            dropitem = Item(item_img_rgb, item_img_gray,
+            dropitem = Item(i, item_img_rgb, item_img_gray,
                             svm, svm_card, fileextention,
                             self.current_dropPriority, mode, debug)
+            if dropitem.id == -1:
+                break
             self.current_dropPriority = item_dropPriority[dropitem.id]
             self.items.append((dropitem, pt))
 
@@ -215,8 +224,7 @@ class ScreenShot:
             cv2.rectangle(img_copy, topleft, bottomright, (0, 0, 255), 3)
             cv2.imwrite("./scroll_bar_selected.jpg", img_copy)
 
-        gray_image = self.img_gray[topleft[1]
-            : bottomright[1], topleft[0]: bottomright[0]]
+        gray_image = self.img_gray[topleft[1]: bottomright[1], topleft[0]: bottomright[0]]
         _, binary = cv2.threshold(gray_image, 225, 255, cv2.THRESH_BINARY)
         if debug:
             cv2.imwrite("scroll_bar_binary.png", binary)
@@ -231,6 +239,22 @@ class ScreenShot:
         res = cv2.matchTemplate(binary, template, cv2.TM_CCOEFF_NORMED)
         _, maxValue, _, max_loc = cv2.minMaxLoc(res)
         return max_loc[1] / gray_image.shape[0] if maxValue > 0.5 else -1
+
+    def calc_black_whiteArea(self, bw_image):
+        image_size = bw_image.size
+        whitePixels = cv2.countNonZero(bw_image)
+
+        whiteAreaRatio = (whitePixels / image_size) * 100  # [%]
+
+        return whiteAreaRatio
+
+    def is_empty_box(self, img_th):
+        """
+        アイテムボックスにアイテムが無いことを判別する
+        """
+        if self.calc_black_whiteArea(img_th) < 1:
+            return True
+        return False
 
     def get_qp_from_text(self, text):
         """
@@ -267,9 +291,10 @@ class ScreenShot:
         )
 
         qp = self.get_qp_from_text(qp_text)
+        logger.debug('qp from text: %s', qp)
 
         if qp == 0:
-            qp = -1
+            qp = QP_UNKNOWN
 
         return qp
 
@@ -277,17 +302,22 @@ class ScreenShot:
         """
         capy-drop-parser から流用
         """
-        pt = pageinfo.detect_qp_region(
+        bounds = pageinfo.detect_qp_region(
             self.img_rgb_orig, debug, "./qp_total_detection.jpg")
-        return self.__get_qp_inner(pt[0], pt[1])
+        logger.debug('Total QP bounds: %s', bounds)
+        return self.__get_qp_inner(bounds[0], bounds[1])
 
     def get_qp_gained(self, debug=False):
-        (topleft, bottomright) = pageinfo.detect_qp_region(self.img_rgb_orig)
+        bounds = pageinfo.detect_qp_region(self.img_rgb_orig)
+        logger.debug('Total QP bounds: %s', bounds)
+        if bounds is None:
+            return QP_UNKNOWN
         # Detecting the QP box with different shading is "easy", while detecting the absence of it
         # for the gain QP amount is hard. However, the 2 values have the same font and thus roughly
         # the same height (please NA...). You can consider them to be 2 same-sized boxes on top of
         # each other.
 
+        (topleft, bottomright) = bounds
         height = bottomright[1] - topleft[1]
         topleft = (topleft[0], topleft[1] - height + int(height*0.12))
         bottomright = (bottomright[0], bottomright[1] - height)
@@ -466,7 +496,7 @@ class ScreenShot:
             ret = cv2.boundingRect(cnt)
             area = cv2.contourArea(cnt)
             pt = [ret[0], ret[1], ret[0] + ret[2], ret[1] + ret[3]]
-            if ret[2] < int(w/2) and area > 100:
+            if ret[2] < int(w/2) and area > 100 and 0.4 < ret[2]/ret[3] < 0.8:
                 flag = False
                 for p in item_pts:
                     if has_intersect(p, pt):
@@ -481,6 +511,9 @@ class ScreenShot:
                 if flag is False:
                     item_pts.append(pt)
 
+        if len(item_pts) == 0:
+            # Recognizing Failure
+            return -1
         item_pts.sort()
         if debug:
             print("ドロップ桁数(OCR): {}".format(len(item_pts)))
@@ -573,13 +606,6 @@ class ScreenShot:
                         leftcell_pts.append(pts)
         item_pts = self.calc_offset(leftcell_pts, std_pts, margin_x)
 
-        # 頁数と宝箱数によってすでに報告した戦利品を間引く
-        if self.pagenum == 1 and self.chestnum < 20:
-            item_pts = item_pts[:self.chestnum+1]
-        elif self.pages - self.pagenum == 0:
-            item_pts = item_pts[14 - (self.lines + 2) % 3 * 7:
-                                15 + self.chestnum % 7]
-
         return item_pts
 
     def booty_pts(self):
@@ -633,8 +659,9 @@ def generate_booty_pts(criteria_left, criteria_top, item_width, item_height,
 
 
 class Item:
-    def __init__(self, img_rgb, img_gray, svm, svm_card, fileextention,
+    def __init__(self, pos, img_rgb, img_gray, svm, svm_card, fileextention,
                  current_dropPriority, mode='jp', debug=False):
+        self.position = pos
         self.img_rgb = img_rgb
         self.img_gray = img_gray
         self.img_hsv = cv2.cvtColor(img_rgb, cv2.COLOR_BGR2HSV)
@@ -644,6 +671,9 @@ class Item:
 
         self.height, self.width = img_rgb.shape[:2]
         self.category = self.classify_category(svm_card)
+        if pos < 14 and self.category == "":
+            self.id = -1
+            return
         self.id = self.classify_card(img_rgb, current_dropPriority, debug)
         if debug:
             print("id: {}".format(self.id))
@@ -682,7 +712,7 @@ class Item:
                 else:
                     flag = True
 
-        if flag:
+        if flag is False:
             pts.append(pt)
         return pts
 
@@ -1607,8 +1637,8 @@ def get_output(input_file_paths, args):
     fileoutput = []  # 出力
     prev_pages = 0
     prev_pagenum = 0
-    prev_total_qp = -1
-    prev_gained_qp = -1
+    prev_total_qp = QP_UNKNOWN
+    prev_gained_qp = QP_UNKNOWN
     prev_itemlist = []
     prev_datetime = datetime.datetime(year=2015, month=7, day=30, hour=0)
     all_parsed_output = []
@@ -1687,8 +1717,7 @@ def get_output(input_file_paths, args):
             parsed_img_data["drops"] = screenshot.itemlist
 
         except Exception as e:
-            if debug:
-                print(e)
+            logger.error(e, exc_info=True)
             parsed_img_data["status"] = "Invalid file"
             all_parsed_output.append(parsed_img_data)
             continue
@@ -1844,8 +1873,15 @@ if __name__ == '__main__':
     parser.add_argument('-d', '--debug', help='デバッグ情報の出力', action='store_true')
     parser.add_argument('--version', action='version',
                         version=PROGNAME + " " + VERSION)
+    parser.add_argument('-l', '--loglevel',
+                        choices=('debug', 'info'), default='info')
 
     args = parser.parse_args()    # 引数を解析
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(name)s <%(filename)s-L%(lineno)s> [%(levelname)s] %(message)s',
+    )
+    logger.setLevel(args.loglevel.upper())
 
     for ndir in [Item_dir, CE_dir, Point_dir]:
         if not ndir.is_dir():
