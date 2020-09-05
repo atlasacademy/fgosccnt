@@ -210,7 +210,7 @@ class ScreenShot:
             self.items.append((dropitem, pt))
 
         self.itemlist = self.makeitemlist()
-        self.total_qp = self.get_qp(debug)
+        self.total_qp = self.get_qp()
         self.gained_qp = self.get_qp_gained(debug)
         self.scroll_position = self.determine_scroll_position(debug)
 
@@ -285,46 +285,32 @@ class ScreenShot:
             config="-l eng --oem 1 --psm 7 -c tessedit_char_whitelist=,0123456789+",
         )
 
-    def __get_qp_inner(self, bounds, img, debug=False, debug_img=""):
-        if debug:
-            img_copy = img.copy()
-            cv2.rectangle(img_copy, bounds[0], bounds[1], (0, 0, 255), 3)
-            cv2.imwrite(debug_img, img_copy)
+    def get_qp(self):
+        """
+        capy-drop-parser から流用
+        """
+        pt = pageinfo.detect_qp_region(self.img_rgb)
+        logger.debug('pt from pageinfo: %s', pt)
+        if pt is None:
+            pt = ((288, 948), (838, 1024))
 
-        (topleft, bottomright) = bounds
-        qp_text = self.extract_text_from_image(
-            img[topleft[1]: bottomright[1],
-                topleft[0]: bottomright[0]]
+        qp_total_text = self.extract_text_from_image(
+            self.img_rgb[pt[0][1]: pt[1][1], pt[0][0]: pt[1][0]]
         )
 
-        qp = self.get_qp_from_text(qp_text)
-        logger.debug('qp from text: %s', qp)
+        qp_total = self.get_qp_from_text(qp_total_text)
+        logger.debug('qp_total from text: %s', qp_total)
+        if qp_total == 0:
+            return QP_UNKNOWN
 
-        if qp == 0:
-            qp = QP_UNKNOWN
-
-        return qp
-
-    def get_qp(self, debug=False):
-        bounds = pageinfo.detect_qp_region(self.img_rgb_orig)
-
-        if bounds is None:
-            # fall back on hardcoded bound and resized image
-            bounds = ((305, 950), (305 + 600, 950 + 75))
-            img = self.img_rgb
-        else:
-            img = self.img_rgb_orig
-
-        logger.debug('Total QP bounds: %s', bounds)
-        return self.__get_qp_inner(bounds, img, debug, "./qp_total_detection.jpg")
+        return qp_total
 
     def get_qp_gained(self, debug=False):
-        bounds = pageinfo.detect_qp_region(self.img_rgb_orig)
-
+        bounds = pageinfo.detect_qp_region(self.img_rgb)
         if bounds is None:
-            # fall back on hardcoded bound and resized image
-            bounds = ((305, 865), (305 + 600, 865 + 75))
-            img = self.img_rgb
+            # fall back on hardcoded bound
+            bounds = ((288, 863), (838, 939))
+            (topleft, bottomright) = bounds
         else:
             # Detecting the QP box with different shading is "easy", while detecting the absence of it
             # for the gain QP amount is hard. However, the 2 values have the same font and thus roughly
@@ -335,10 +321,24 @@ class ScreenShot:
             topleft = (topleft[0], topleft[1] - height + int(height*0.12))
             bottomright = (bottomright[0], bottomright[1] - height)
             bounds = (topleft, bottomright)
-            img = self.img_rgb_orig
 
         logger.debug('Gained QP bounds: %s', bounds)
-        return self.__get_qp_inner(bounds, img, debug, "./qp_gain_detection.jpg")
+        if debug:
+            img_copy = self.img_rgb.copy()
+            cv2.rectangle(img_copy, bounds[0], bounds[1], (0, 0, 255), 3)
+            cv2.imwrite("./qp_gain_detection.jpg", img_copy)
+
+        qp_gain_text = self.extract_text_from_image(
+            self.img_rgb[topleft[1]: bottomright[1],
+                         topleft[0]: bottomright[0]]
+        )
+
+        qp_gain = self.get_qp_from_text(qp_gain_text)
+        logger.debug('qp from text: %s', qp_gain)
+        if qp_gain == 0:
+            qp_gain = QP_UNKNOWN
+
+        return qp_gain
 
     def find_edge(self, img_th, reverse=False):
         """
