@@ -1886,7 +1886,7 @@ def output_json(parsed_output, out_folder):
 
                 title = Path(parsed_file["image_path"]).stem
                 with open(Path("{}/{}.json".format(out_folder, title)), "w") as f:
-                    json.dump(parsed_file, f, ensure_ascii=False)
+                    json.dump(parsed_file, f, indent=4, ensure_ascii=False)
             except:
                 print("Error during parsing: {}".format(parsed_file))
 
